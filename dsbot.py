@@ -68,27 +68,61 @@ async def sendLeaderboardNews():
         gained = oldRank - newRank
         chat = bot.get_channel(int(channel.chatId))
         if gained > 0:
-            await chat.send(parseHTML("📈 La squadra <b>{}</b> è salita di <b>{}</b> posizioni!\n"
-                                      "📊 Rank attuale: {}".format(teamInfo["name"], gained, newRank)))
+            if channel.viewEmbed:
+                embedVar = discord.Embed(title="📊 Nuova posizione in classifica!",
+                                         description="📈 La squadra {} è salita di {} posizioni!\n"
+                                                     "📊 Rank attuale: {}".format(teamInfo["name"], gained, newRank),
+                                         color=0x277ecd)
+                await chat.send(embed=embedVar)
+            else:
+                await chat.send(parseHTML("📈 La squadra <b>{}</b> è salita di <b>{}</b> posizioni!\n"
+                                          "📊 Rank attuale: {}".format(teamInfo["name"], gained, newRank)))
         elif gained < 0:
-            await chat.send(parseHTML("📉 La squadra <b>{}</b> è scesa di <b>{}</b> posizioni.\n"
-                                      "📊 Rank attuale: {}".format(teamInfo["name"], -gained, newRank)))
+            if channel.viewEmbed:
+                embedVar = discord.Embed(title="📊 Nuova posizione in classifica!",
+                                         description="📉 La squadra {} è scesa di {} posizioni.\n"
+                                                     "📊 Rank attuale: {}".format(teamInfo["name"], -gained, newRank),
+                                         color=0x277ecd)
+                await chat.send(embed=embedVar)
+            else:
+                await chat.send(parseHTML("📉 La squadra <b>{}</b> è scesa di <b>{}</b> posizioni.\n"
+                                          "📊 Rank attuale: {}".format(teamInfo["name"], -gained, newRank)))
 
     # Send team points changed
     channels = select(ch for ch in DSChat if ("pointsChanged" in ch.news) and (ch.teamName in teams))[:]
     for channel in channels:
-        message = ""
-        for quest in api.questions():
-            score = api.getTeamPartial(channel.teamName, quest)
-            oldScore = api.getTeamPartial(channel.teamName, quest, oldData=True)
-            gained = score - oldScore
-            if gained > 0:
-                message += "🟢 <code>{}:</code> {}/100 (+{})\n".format(quest, score, gained)
-            elif gained < 0:
-                message += "🔴 <code>{}:</code> {}/100 (-{})\n".format(quest, score, -gained)
-        if message != "":
-            chat = bot.get_channel(int(channel.chatId))
-            await chat.send(parseHTML("📊 <b>Nuovi punteggi!</b>\n\n" + message))
+        if channel.viewEmbed:
+            leftColumn = ""
+            rightColumn = ""
+            for quest in api.questions():
+                score = api.getTeamPartial(channel.teamName, quest)
+                oldScore = api.getTeamPartial(channel.teamName, quest, oldData=True)
+                gained = score - oldScore
+                if gained > 0:
+                    leftColumn += "🟢 {}:\n".format(quest)
+                    rightColumn += "{}/100 (+{})\n".format(score, gained)
+                elif gained < 0:
+                    leftColumn += "🔴 {}:\n".format(quest)
+                    rightColumn += "{}/100 (-{})\n".format(score, -gained)
+            if leftColumn != "":
+                chat = bot.get_channel(int(channel.chatId))
+                embedVar = discord.Embed(title="📊 Nuovi punteggi!", color=0x277ecd)
+                embedVar.add_field(name="Quesito", value=leftColumn, inline=True)
+                embedVar.add_field(name="Punteggio", value=rightColumn, inline=True)
+                await chat.send(embed=embedVar)
+        else:
+            message = ""
+            for quest in api.questions():
+                score = api.getTeamPartial(channel.teamName, quest)
+                oldScore = api.getTeamPartial(channel.teamName, quest, oldData=True)
+                gained = score - oldScore
+                if gained > 0:
+                    message += "🟢 <code>{}:</code> {}/100 (+{})\n".format(quest, score, gained)
+                elif gained < 0:
+                    message += "🔴 <code>{}:</code> {}/100 (-{})\n".format(quest, score, -gained)
+            if message != "":
+                chat = bot.get_channel(int(channel.chatId))
+                await chat.send(parseHTML("📊 <b>Nuovi punteggi!</b>\n\n" + message))
 
 @tasks.loop(minutes=1.0)
 async def runUpdates():
