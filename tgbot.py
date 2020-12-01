@@ -14,8 +14,8 @@ from modules.api import OISRankingAPI, NoEventRunning, TeamNameError
 with open("settings.json") as settings_file:
     js_settings = jsload(settings_file)
 
-bot = Bot(js_settings["tgToken"])
-adminIds = js_settings["admins"]
+bot = Bot(js_settings["telegram"]["token"])
+adminIds = js_settings["telegram"]["admins"]
 api = OISRankingAPI()
 roundStarted = False
 
