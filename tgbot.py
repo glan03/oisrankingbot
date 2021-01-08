@@ -27,9 +27,14 @@ def sendRoundStarted():
     else:
         users = select(user for user in TGUser if ("eventStart" in user.news) and (user.chatId in adminIds))[:]
     for user in users:
-        bot.sendMessage(user.chatId, "🔔 <b>Gara iniziata!</b>\n"
-                                     "La classifica è attiva, puoi visualizzare le informazioni della tua squadra con /team.\n"
-                                     "Buona fortuna!", parse_mode="HTML")
+        try:
+            bot.sendMessage(user.chatId, "🔔 <b>Gara iniziata!</b>\n"
+                                         "La classifica è attiva, puoi visualizzare le informazioni della tua squadra con /team.\n"
+                                         "Buona fortuna!", parse_mode="HTML")
+        except TelegramError:
+            pass
+        except BotWasBlockedError:
+            user.delete()
 
 
 @db_session
@@ -43,12 +48,17 @@ def sendLeaderboardNews():
         newRank = teamInfo["rank"]
         oldRank = prevTeamInfo["rank"]
         gained = oldRank - newRank
-        if gained > 0:
-            bot.sendMessage(user.chatId, "📈 La squadra <b>{}</b> è salita di <b>{}</b> posizioni!\n"
-                                         "📊 Rank attuale: {}".format(teamInfo["name"], gained, newRank), parse_mode="HTML")
-        elif gained < 0:
-            bot.sendMessage(user.chatId, "📉 La squadra <b>{}</b> è scesa di <b>{}</b> posizioni.\n"
-                                         "📊 Rank attuale: {}".format(teamInfo["name"], -gained, newRank), parse_mode="HTML")
+        try:
+            if gained > 0:
+                bot.sendMessage(user.chatId, "📈 La squadra <b>{}</b> è salita di <b>{}</b> posizioni!\n"
+                                             "📊 Rank attuale: {}".format(teamInfo["name"], gained, newRank), parse_mode="HTML")
+            elif gained < 0:
+                bot.sendMessage(user.chatId, "📉 La squadra <b>{}</b> è scesa di <b>{}</b> posizioni.\n"
+                                             "📊 Rank attuale: {}".format(teamInfo["name"], -gained, newRank), parse_mode="HTML")
+        except TelegramError:
+            pass
+        except BotWasBlockedError:
+            user.delete()
 
     # Send team points changed
     teams = api.teams()
@@ -64,7 +74,12 @@ def sendLeaderboardNews():
             elif gained < 0:
                 message += "🔴 <code>{}</code>: {}/100 (-{})\n".format(quest, score, -gained)
         if message != "":
-            bot.sendMessage(user.chatId, "📊 <b>Nuovi punteggi!</b>\n\n" + message, parse_mode="HTML")
+            try:
+                bot.sendMessage(user.chatId, "📊 <b>Nuovi punteggi!</b>\n\n" + message, parse_mode="HTML")
+            except TelegramError:
+                pass
+            except BotWasBlockedError:
+                user.delete()
 
 
 def runUpdates():
