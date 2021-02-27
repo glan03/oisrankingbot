@@ -1,5 +1,6 @@
 from requests import get
 from lxml import html
+from requests.exceptions import ReadTimeout
 
 
 class NoEventRunning(Exception):
@@ -42,7 +43,10 @@ class OISRankingAPI:
     def refresh(self):
         self.prevPage = self.page
         if not self.debug:
-            resp = get(self.baseUrl + self.sub)
+            try:
+                resp = get(self.baseUrl + self.sub, timeout=5)
+            except ReadTimeout:
+                raise NoEventRunning
             if resp.status_code == 404:
                 raise NoEventRunning
             self.page = html.fromstring(resp.content)
