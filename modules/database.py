@@ -1,10 +1,10 @@
-from pony.orm import Database, Required, Optional, StrArray
+from pony.orm import Database, PrimaryKey, Required, Optional, StrArray
 
 db = Database("sqlite", "../oisrankingbot.db", create_db=True)
 
 
 class TGUser(db.Entity):
-    chatId = Required(int)
+    chatId = PrimaryKey(int, sql_type="BIGINT", size=64)
     status = Required(str, default="normal")
     teamName = Optional(str)
     news = Required(StrArray, default=["eventStart", "rankChanged", "pointsChanged"])

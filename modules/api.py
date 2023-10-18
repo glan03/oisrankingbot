@@ -1,6 +1,4 @@
 from requests import get
-from lxml import html
-from requests.exceptions import ReadTimeout
 
 
 class NoEventRunning(Exception):
@@ -17,86 +15,55 @@ class QuestionNameError(Exception):
 
 
 class OISRankingAPI:
-    baseUrl = "https://gara.squadre.olinfo.it/ranking/"
-    xpaths = {
-        "titleGroup": "/html/body/table/thead/tr",
-        "teamsGroup": "/html/body/table/tbody",
-        "leaderboardTitle": "/html/body/h1"
-    }
+    baseUrl = "https://judge.science.unitn.it/ranking"
+    data = {}
+    oldData = {}
 
-    sub = ""
-    debug = False
-    page = None
-    prevPage = None
+    def __init__(self) -> None:
+        self.refresh()
 
-    def __init__(self, sub: str="", _debug: bool=False):
-        if sub not in ["biennio", "triennio"]:
-            sub = ""
-        self.sub = sub
-        self.debug = _debug
-        self.page = None
+    def refresh(self) -> None:
+        self.oldData = self.data
         try:
-            self.refresh()
-        except NoEventRunning:
-            pass
+            self.data = {
+                "teams": get(f"{self.baseUrl}/teams", timeout=5).json(),
+                "users": get(f"{self.baseUrl}/users", timeout=5).json(),
+                "tasks": get(f"{self.baseUrl}/tasks", timeout=5).json(),
+                "scores": get(f"{self.baseUrl}/scores", timeout=5).json()
+            }
+        except Exception:
+            raise NoEventRunning
 
-    def refresh(self):
-        self.prevPage = self.page
-        if not self.debug:
-            try:
-                resp = get(self.baseUrl + self.sub, timeout=5)
-            except ReadTimeout:
-                raise NoEventRunning
-            if resp.status_code == 404:
-                raise NoEventRunning
-            self.page = html.fromstring(resp.content)
-        else:
-            doc = self.sub if self.sub else "all"
-            self.page = html.fromstring(open(f"dev/{doc}.html").read())
+    def questions(self, oldData: bool=False) -> list[str]:
+        data = self.data if not oldData else self.oldData
+        return sorted([x for x in data['tasks']], key=lambda x: data['tasks'][x]['order'])
 
-    def _getTitleRow(self, oldData: bool=False):
-        page = self.page if not oldData else self.prevPage
-        return page.xpath(self.xpaths["titleGroup"])[0]
+    def teams(self, oldData: bool=False) -> list[str]:
+        data = self.data if not oldData else self.oldData
+        scores = data['scores']
+        return sorted([x for x in data['users']], key=lambda x: sum(scores.get(x, {}).values()), reverse=True)
 
-    def _getTeamsRow(self, oldData: bool=False):
-        page = self.page if not oldData else self.prevPage
-        return page.xpath(self.xpaths["teamsGroup"])[0]
-
-    def changeSub(self, newSub: str=""):
-        if newSub not in ["biennio", "triennio"]:
-            newSub = ""
-        self.sub = newSub
-
-    def leaderboardTitle(self, oldData: bool=False):
-        page = self.page if not oldData else self.prevPage
-        return str(page.xpath(self.xpaths["leaderboardTitle"])[0].text).strip().replace("  ", " ")
-
-    def questions(self, oldData: bool=False):
-        return [str(x[0].text).strip() for x in self._getTitleRow(oldData)[5:]]
-
-    def teams(self, oldData: bool=False):
-        return [str(x[1][0].text).strip() for x in self._getTeamsRow(oldData)]
-
-    def teamInfo(self, teamName: str, oldData: bool=False):
+    def teamInfo(self, teamName: str, oldData: bool=False) -> dict:
         if teamName not in self.teams(oldData):
             raise TeamNameError
-        teamPos = self.teams(oldData).index(teamName)
-        teamRaw = self._getTeamsRow(oldData)[teamPos]
+
+        data = self.data if not oldData else self.oldData
+        tasks = self.questions(oldData)
+        partials = data['scores'][teamName]
+        partials = [partials.get(task, 0) for task in tasks]
+        total = sum(partials)
+        rank = self.teams(oldData).index(teamName) + 1
+
         return {
-            "index": int(teamPos),
-            "rank": int(teamRaw[0].text),
-            "name": str(teamRaw[1][0].text).strip(),
-            "institute": str(teamRaw[2].text).strip(),
-            "region": str(teamRaw[3].text).strip(),
-            "totalScore": float(teamRaw[4].text),
-            "partialScores": [float(x.text) for x in teamRaw[5:]]
+            "rank": rank,
+            "name": teamName,
+            "partialScores": partials,
+            "totalScore": total
         }
 
-    def getTeamPartial(self, teamName: str, questionName: str, oldData: bool=False):
+    def getTeamPartial(self, teamName: str, questionName: str, oldData: bool=False) -> float:
         if questionName not in self.questions(oldData):
             raise QuestionNameError
+
         questionPos = self.questions(oldData).index(questionName)
         return self.teamInfo(teamName, oldData)["partialScores"][questionPos]
-
-    def validTeamName(self, teamName: str, oldData: bool=False):
-        return teamName in self.teams(oldData)

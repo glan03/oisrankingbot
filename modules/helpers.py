@@ -20,7 +20,7 @@ rankIcons = {
 }
 
 
-def getStatIcon(score: float):
+def getStatIcon(score: float) -> str:
     if score < 30:
         stat = "low"
     elif score < 60:
@@ -34,8 +34,5 @@ def getStatIcon(score: float):
     return statsIcons[stat]
 
 
-def getRankIcon(rank: int):
-    if rank in rankIcons:
-        return rankIcons[rank]
-    else:
-        return "<b>{}°</b>".format(rank)
+def getRankIcon(rank: int) -> str:
+    return rankIcons.get(rank, f"<b>{rank}°</b>")

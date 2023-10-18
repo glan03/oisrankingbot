@@ -22,46 +22,43 @@ roundStarted = False
 
 @db_session
 def sendRoundStarted():
-    if not api.debug:
-        users = select(user for user in TGUser if "eventStart" in user.news)[:]
-    else:
-        users = select(user for user in TGUser if ("eventStart" in user.news) and (user.chatId in adminIds))[:]
+    users = select(user for user in TGUser if "eventStart" in user.news)[:]
     for user in users:
         try:
-            bot.sendMessage(user.chatId, "🔔 <b>Gara iniziata!</b>\n"
-                                         "La classifica è attiva, puoi visualizzare le informazioni della tua squadra con /team.\n"
-                                         "Buona fortuna!", parse_mode="HTML")
-        except TelegramError:
-            pass
+            bot.sendMessage(user.chatId,
+                            "🔔 <b>Gara iniziata!</b>\n"
+                                 "La classifica è attiva, puoi visualizzare le informazioni della tua squadra con /team.\n"
+                                 "Buona fortuna!", parse_mode="HTML")
         except BotWasBlockedError:
             user.delete()
+        except TelegramError:
+            pass
 
 
 @db_session
 def sendLeaderboardNews():
-    # Send team rank changed
     teams = api.teams()
+
+    # Send team rank changed
     users = select(user for user in TGUser if ("rankChanged" in user.news) and (user.teamName in teams))[:]
     for user in users:
-        teamInfo = api.teamInfo(user.teamName)
-        prevTeamInfo = api.teamInfo(user.teamName, oldData=True)
-        newRank = teamInfo["rank"]
-        oldRank = prevTeamInfo["rank"]
-        gained = oldRank - newRank
+        team = api.teamInfo(user.teamName)
+        prevTeam = api.teamInfo(user.teamName, oldData=True)
+        newRank = team["rank"]
+        gained = prevTeam["rank"] - newRank
         try:
             if gained > 0:
-                bot.sendMessage(user.chatId, "📈 La squadra <b>{}</b> è salita di <b>{}</b> posizioni!\n"
-                                             "📊 Rank attuale: {}".format(teamInfo["name"], gained, newRank), parse_mode="HTML")
+                bot.sendMessage(user.chatId, f"📈 La squadra <b>{team['name']}</b> è salita di <b>{gained}</b> posizioni!\n"
+                                             f"📊 Rank attuale: {newRank}", parse_mode="HTML")
             elif gained < 0:
-                bot.sendMessage(user.chatId, "📉 La squadra <b>{}</b> è scesa di <b>{}</b> posizioni.\n"
-                                             "📊 Rank attuale: {}".format(teamInfo["name"], -gained, newRank), parse_mode="HTML")
-        except TelegramError:
-            pass
+                bot.sendMessage(user.chatId, f"📉 La squadra <b>{team['name']}</b> è scesa di <b>{-gained}</b> posizioni.\n"
+                                             f"📊 Rank attuale: {newRank}", parse_mode="HTML")
         except BotWasBlockedError:
             user.delete()
+        except TelegramError:
+            pass
 
     # Send team points changed
-    teams = api.teams()
     users = select(user for user in TGUser if ("pointsChanged" in user.news) and (user.teamName in teams))[:]
     for user in users:
         message = ""
@@ -70,28 +67,28 @@ def sendLeaderboardNews():
             oldScore = api.getTeamPartial(user.teamName, quest, oldData=True)
             gained = score - oldScore
             if gained > 0:
-                message += "🟢 <code>{}</code>: {}/100 (+{})\n".format(quest, score, gained)
+                message += f"🟢 <code>{quest}</code>: {score}/100 (+{gained})\n"
             elif gained < 0:
-                message += "🔴 <code>{}</code>: {}/100 (-{})\n".format(quest, score, -gained)
+                message += f"🔴 <code>{quest}</code>: {score}/100 ({gained})\n"
+
         if message != "":
             try:
-                bot.sendMessage(user.chatId, "📊 <b>Nuovi punteggi!</b>\n\n" + message, parse_mode="HTML")
-            except TelegramError:
-                pass
+                bot.sendMessage(user.chatId, f"📊 <b>Nuovi punteggi!</b>\n\n{message}", parse_mode="HTML")
             except BotWasBlockedError:
                 user.delete()
+            except TelegramError:
+                pass
 
 
 def runUpdates():
     global roundStarted
     try:
         api.refresh()
-        # At this point, an event is running
         if not roundStarted:
             sendRoundStarted()
+            roundStarted = True
         else:
             sendLeaderboardNews()
-        roundStarted = True
     except NoEventRunning:
         roundStarted = False
 
@@ -124,15 +121,15 @@ def reply(msg):
         bot.sendMessage(chatId, "Ciao, serve aiuto? 👋🏻\n"
                                 "Posso visualizzare la classifica dei round attivi, e inviarti notifiche se ci sono novità sulla tua squadra.\n\n"
                                 "<b>Lista dei comandi</b>:\n"
-                                "- /start - Avvia il bot\n"
-                                "- /team - Visualizza info sulla tua squadra\n"
-                                "- /partials - Visualizza i punteggi singoli dei problemi\n"
-                                "- /leaderboard - Visualizza la classifica completa\n"
-                                "- /top - Visualizza top team\n"
-                                "- /settings - Modifica le tue impostazioni\n"
-                                "- /about - Informazioni sul bot\n"
-                                "- /annulla - Annulla il comando attuale\n"
-                                "- /support - Contatta lo staff (emergenze)\n\n"
+                                "/start - Avvia il bot\n"
+                                "/team - Visualizza info sulla tua squadra\n"
+                                "/partials - Visualizza i punteggi singoli dei problemi\n"
+                                "/leaderboard - Visualizza la classifica completa\n"
+                                "/top - Visualizza top team\n"
+                                "/settings - Modifica le tue impostazioni\n"
+                                "/about - Informazioni sul bot\n"
+                                "/annulla - Annulla il comando attuale\n"
+                                "/support - Contatta lo staff (emergenze)\n\n"
                                 "<b>Impostazioni</b>: con /settings puoi cambiare varie impostazioni, come quali notifiche ricevere e che squadra seguire."
                                 "", parse_mode="HTML")
 
@@ -144,9 +141,9 @@ def reply(msg):
         elif user.status == "calling_support":
             user.status = "normal"
             for a in adminIds:
-                bot.sendMessage(a, "🆘 <b>Richiesta di aiuto</b>\n"
-                                    "Da: <a href=\"tg://user?id={0}\">{1}</a>\n\n"
-                                    "<i>Rispondi al messaggio per parlare con l'utente.</i>".format(chatId, name), parse_mode="HTML")
+                bot.sendMessage(a, f"🆘 <b>Richiesta di aiuto</b>\n"
+                                   f"Da: <a href=\"tg://user?id={chatId}\">{name}</a>\n\n"
+                                   f"<i>Rispondi al messaggio per parlare con l'utente.</i>", parse_mode="HTML")
                 if "reply_to_message" in msg:
                     bot.forwardMessage(a, chatId, msg["reply_to_message"]["message_id"])
                 bot.forwardMessage(a, chatId, msg["message_id"], disable_notification=True)
@@ -156,7 +153,7 @@ def reply(msg):
         elif user.status == "changing_team":
             user.status = "normal"
             user.teamName = text
-            bot.sendMessage(chatId, "✅ La tua squadra è <b>{}</b>!".format(user.teamName), parse_mode="HTML")
+            bot.sendMessage(chatId, f"✅ La tua squadra è <b>{user.teamName}</b>!", parse_mode="HTML")
 
     elif text.startswith("/broadcast ") and chatId in adminIds:
         bdText = text.split(" ", 1)[1]
@@ -167,27 +164,18 @@ def reply(msg):
                 bot.sendMessage(u, bdText, parse_mode="HTML", disable_web_page_preview=True)
             except (TelegramError, BotWasBlockedError):
                 userCount -= 1
-        bot.sendMessage(chatId, "📢 Messaggio inviato correttamente a {0} utenti!".format(userCount))
+        bot.sendMessage(chatId, f"📢 Messaggio inviato correttamente a {userCount} utenti!")
 
     elif text == "/users" and chatId in adminIds:
         totalUsers = len(select(u for u in TGUser)[:])
-        bot.sendMessage(chatId, "👤 Utenti totali: <b>{}</b>".format(totalUsers), parse_mode="HTML")
-
-    elif text == "/debug" and chatId in adminIds:
-        api = OISRankingAPI(_debug=True)
-        bot.sendMessage(chatId, "Debug mode active!\n"
-                                "Press /nodebug to disable.")
-
-    elif text == "/nodebug" and chatId in adminIds:
-        api = OISRankingAPI(_debug=False)
-        bot.sendMessage(chatId, "Debug mode disabled!")
+        bot.sendMessage(chatId, f"👤 Utenti totali: <b>{totalUsers}</b>", parse_mode="HTML")
 
     elif "reply_to_message" in msg:
         if chatId in adminIds:
             try:
                 userId = msg["reply_to_message"]["forward_from"]["id"]
-                bot.sendMessage(userId, "💬 <b>Risposta dello staff</b>\n"
-                                        "{0}".format(text), parse_mode="HTML")
+                bot.sendMessage(userId, f"💬 <b>Risposta dello staff</b>\n"
+                                        f"{text}", parse_mode="HTML")
                 bot.sendMessage(chatId, "Risposta inviata!")
             except Exception:
                 bot.sendMessage(chatId, "Errore nell'invio.\n"
@@ -200,33 +188,32 @@ def reply(msg):
 
     elif text == "/start":
         if roundStarted:
-            bot.sendMessage(chatId, "Bentornato, <b>{0}</b>!\n"
-                                    "🟢 <i>La gara è iniziata! Cosa aspetti?</i>\n\n"
-                                    "Cosa posso fare per te? 😊".format(name), parse_mode="HTML")
+            bot.sendMessage(chatId, f"Bentornato, <b>{name}</b>!\n"
+                                    f"🟢 <i>La gara è iniziata! Cosa aspetti?</i>\n\n"
+                                    f"Cosa posso fare per te? 😊", parse_mode="HTML")
         else:
-            bot.sendMessage(chatId, "Bentornato, <b>{0}</b>!\n"
-                                    "🔴 <i>Attualmente nessuna competizione è in corso.</i>\n\n"
-                                    "Cosa posso fare per te? 😊".format(name), parse_mode="HTML")
+            bot.sendMessage(chatId, f"Bentornato, <b>{name}</b>!\n"
+                                    f"🔴 <i>Attualmente nessuna competizione è in corso.</i>\n\n"
+                                    f"Cosa posso fare per te? 😊", parse_mode="HTML")
 
     elif text == "/team":
         if user.teamName:
             if roundStarted:
                 try:
-                    teamInfo = api.teamInfo(user.teamName)
+                    team = api.teamInfo(user.teamName)
                 except TeamNameError:
                     bot.sendMessage(chatId, "⚠️ La squadra che hai inserito non è presente nella classifica!\n"
                                             "Premi /settings per cambiare il nome della squadra.", parse_mode="HTML")
                     return
                 teams = api.teams()
-                bot.sendMessage(chatId, "👥 Team: <b>{}</b>\n\n"
-                                        "📊 Rank: <b>{}°</b> / {}\n"
-                                        "📈 Total Score: <b>{}</b> / {}pts.\n\n"
-                                        "<i>Usa </i>/partials<i> per vedere i punteggi singoli dei quesiti.</i>"
-                                        "".format(teamInfo["name"], teamInfo["rank"], len(teams),
-                                                  teamInfo["totalScore"], len(api.questions())*100), parse_mode="HTML")
+                bot.sendMessage(chatId, f"👥 Team: <b>{team['name']}</b>\n\n"
+                                        f"📊 Rank: <b>{team['rank']}°</b> / {len(teams)}\n"
+                                        f"📈 Total Score: <b>{team['totalScore']}</b> / {len(api.questions())*100}pts.\n\n"
+                                        f"<i>Usa </i>/partials<i> per vedere i punteggi singoli dei quesiti.</i>",
+                                parse_mode="HTML")
             else:
-                bot.sendMessage(chatId, "👥 La tua squadra è <b>{}</b>.\n"
-                                        "Posso visualizzare più informazioni quando è attiva una gara.".format(user.teamName),
+                bot.sendMessage(chatId, f"👥 La tua squadra è <b>{user.teamName}</b>.\n"
+                                        f"Posso visualizzare più informazioni quando è attiva una gara.",
                                 parse_mode="HTML")
         else:
             sent = bot.sendMessage(chatId, "Non hai impostato la tua squadra!\n"
@@ -238,22 +225,22 @@ def reply(msg):
             if roundStarted:
                 questList = api.questions()
                 try:
-                    teamInfo = api.teamInfo(user.teamName)
+                    team = api.teamInfo(user.teamName)
                 except TeamNameError:
                     bot.sendMessage(chatId, "⚠️ La squadra che hai inserito non è presente nella classifica!\n"
                                             "Premi /settings per cambiare il nome della squadra.", parse_mode="HTML")
                     return
                 longestName = max(questList, key=len)
-                questPoints = teamInfo["partialScores"]
-                message = "👥 Team: <b>{}</b>\n\n".format(user.teamName)
+                questPoints = team["partialScores"]
+                message = f"👥 Team: <b>{user.teamName}</b>\n\n"
                 for quest, score in zip(questList, questPoints):
                     padding = " " * (len(longestName) - len(quest))
-                    message += "{}<code> {}: {}</code><b>{}</b> pts.\n".format(helpers.getStatIcon(score), quest, padding, score)
-                message += "\n📈 Total: <b>{}</b> / {}pts.".format(teamInfo["totalScore"], len(questPoints)*100)
+                    message += f"{helpers.getStatIcon(score)}<code> {quest}: {padding}</code><b>{score}</b> pts.\n"
+                message += f"\n📈 Total: <b>{team['totalScore']}</b> / {len(questPoints)*100}pts."
                 bot.sendMessage(chatId, message, parse_mode="HTML")
             else:
-                bot.sendMessage(chatId, "👥 La tua squadra è <b>{}</b>.\n"
-                                        "Posso visualizzare più informazioni quando è attiva una gara.".format(user.teamName),
+                bot.sendMessage(chatId, f"👥 La tua squadra è <b>{user.teamName}</b>.\n"
+                                        f"Posso visualizzare più informazioni quando è attiva una gara.",
                                 parse_mode="HTML")
         else:
             sent = bot.sendMessage(chatId, "Non hai impostato la tua squadra!\n"
@@ -265,8 +252,8 @@ def reply(msg):
             teams = api.teams()
             message = "🏆 <b>Leaderboard</b>\n"
             for pos in range(10):
-                teamInfo = api.teamInfo(teams[pos])
-                message += "\n{} <b>{}</b> ({} pts.)".format(helpers.getRankIcon(teamInfo["rank"]), teamInfo["name"], teamInfo["totalScore"])
+                team = api.teamInfo(teams[pos])
+                message += f"\n{helpers.getRankIcon(team['rank'])} <b>{team['name']}</b> ({team['totalScore']} pts.)"
             bot.sendMessage(chatId, message, parse_mode="HTML", reply_markup=keyboards.leaderboard(1, len(teams)))
         else:
             bot.sendMessage(chatId, "Nessuna gara è attualmente in corso!")
@@ -276,13 +263,12 @@ def reply(msg):
             teams = api.teams()
             message = "🏆 <b>Top Teams</b>\n"
             for pos in range(3):
-                teamInfo = api.teamInfo(teams[pos])
-                message += "\n{} <b>{}</b> ({} pts.)".format(helpers.getRankIcon(teamInfo["rank"]), teamInfo["name"], teamInfo["totalScore"])
+                team = api.teamInfo(teams[pos])
+                message += f"\n{helpers.getRankIcon(team['rank'])} <b>{team['name']}</b> ({team['totalScore']} pts.)"
             if user.teamName:
                 try:
-                    teamInfo = api.teamInfo(user.teamName)
-                    message += "\n\n{} <b>{}</b> ({} pts.)".format(helpers.getRankIcon(teamInfo["rank"]), teamInfo["name"],
-                                                                 teamInfo["totalScore"])
+                    team = api.teamInfo(user.teamName)
+                    message += f"\n\n{helpers.getRankIcon(team['rank'])} <b>{team['name']}</b> ({team['totalScore']} pts.)"
                 except TeamNameError:
                     pass
             bot.sendMessage(chatId, message, parse_mode="HTML")
@@ -319,12 +305,12 @@ def button_press(msg):
         bot.editMessageText((chatId, msgId), "📲 <b>Gestione Notifiche</b>\n\n"
                                              "⏰ Inizio gara: {}\n"
                                              "📊 Nuova posizione in classifica: {}\n"
-                                                  "📈 Punteggio modificato: {}\n\n"
-                                                  "Quali notifiche vuoi ricevere? (Clicca per cambiare)"
-                                                  "".format(
-                                                  "🔔 Attivo" if "eventStart" in user.news else "🔕 Disattivo",
-                                                  "🔔 Attivo" if "rankChanged" in user.news else "🔕 Disattivo",
-                                                  "🔔 Attivo" if "pointsChanged" in user.news else "🔕 Disattivo"),
+                                             "📈 Punteggio modificato: {}\n\n"
+                                             "Quali notifiche vuoi ricevere? (Clicca per cambiare)"
+                                             "".format(
+                                             "🔔 Attivo" if "eventStart" in user.news else "🔕 Disattivo",
+                                             "🔔 Attivo" if "rankChanged" in user.news else "🔕 Disattivo",
+                                             "🔔 Attivo" if "pointsChanged" in user.news else "🔕 Disattivo"),
                             parse_mode="HTML", reply_markup=keyboards.settings_selectnews())
 
     if button == "settings_main":
@@ -334,9 +320,10 @@ def button_press(msg):
 
     elif button == "settings_team":
         if user.teamName:
-            bot.editMessageText((chatId, msgId), "👥 <b>Selezione Team</b>\n"
-                                                      "La tua squadra attuale è <b>{}</b>.\n\n"
-                                                      "Vuoi cambiarlo?".format(user.teamName),
+            bot.editMessageText((chatId, msgId),
+                                f"👥 <b>Selezione Team</b>\n"
+                                     f"La tua squadra attuale è <b>{user.teamName}</b>.\n\n"
+                                     f"Vuoi cambiarlo?",
                                 parse_mode="HTML", reply_markup=keyboards.settings_team())
         else:
             bot.editMessageText((chatId, msgId), "👥 <b>Selezione Team</b>\n"
@@ -373,8 +360,8 @@ def button_press(msg):
             message = "🏆 <b>Leaderboard</b>\n"
             for pos in range(10):
                 pos += 10*(page-1)
-                teamInfo = api.teamInfo(teams[pos])
-                message += "\n{} <b>{}</b> ({} pts.)".format(helpers.getRankIcon(teamInfo["rank"]), teamInfo["name"], teamInfo["totalScore"])
+                team = api.teamInfo(teams[pos])
+                message += f"\n{helpers.getRankIcon(team['rank'])} <b>{team['name']}</b> ({team['totalScore']} pts.)"
             bot.editMessageText((chatId, msgId), message, parse_mode="HTML", reply_markup=keyboards.leaderboard(page, len(teams)))
         else:
             bot.editMessageText((chatId, msgId), "Nessuna gara è attualmente in corso!",
