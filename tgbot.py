@@ -85,7 +85,7 @@ def runUpdates():
     try:
         api.refresh()
         if not roundStarted:
-            sendRoundStarted()
+            # TODO: fix bug // sendRoundStarted()
             roundStarted = True
         else:
             sendLeaderboardNews()
