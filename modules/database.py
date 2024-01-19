@@ -19,3 +19,5 @@ class DSChat(db.Entity):
 
 
 db.generate_mapping(create_tables=True)
+
+##trollato!
